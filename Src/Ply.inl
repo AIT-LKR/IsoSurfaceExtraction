@@ -26,6 +26,9 @@ ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF S
 DAMAGE.
 */
 #include <unordered_map>
+#include <string>
+#include "./meshCalculator.h"
+#include "./meshCalculator.hh"
 
 static char *full_elem_names[] = { "vertex", "edge" , "face" };
 static char *elem_names[] = { "vertex", "face" };
@@ -108,6 +111,44 @@ int PlyWrite
 	if( comments && commentNum ) for( int i=0 ; i<commentNum ; i++ ) ply_put_comment( ply , comments[i] );
 
 	ply_header_complete( ply );
+
+    // get all x,y,z coords:
+    double X[nr_vertices];
+    double Y[nr_vertices];
+    double Z[nr_vertices];
+	for( int i=0 ; i<nr_vertices ; i++ ) {
+        X[i] = vertices[i].point[0];
+        Y[i] = vertices[i].point[1];
+        Z[i] = vertices[i].point[2];
+    }
+    // calculate surface area
+	if( nr_faces ) {
+        int V1[nr_faces];
+        int V2[nr_faces];
+        int V3[nr_faces];
+
+		PlyFace ply_face;
+		int maxFaceVerts=3;
+		ply_face.nr_vertices = 3;
+		ply_face.vertices = new int[3];
+
+		ply_put_element_setup( ply , "face" );
+		for( int i=0 ; i<nr_faces ; i++ )
+		{
+			int face_size = (int)(*polygons)[i].size();
+			if( face_size>maxFaceVerts )
+			{
+				delete[] ply_face.vertices;
+				maxFaceVerts = face_size;
+				ply_face.vertices = new int[face_size];
+			}
+			ply_face.nr_vertices = face_size;
+            V1[i] = (*polygons)[i][0];
+            V2[i] = (*polygons)[i][1];
+            V3[i] = (*polygons)[i][2];
+		}
+		delete[] ply_face.vertices;
+    }
 	
 	// write vertices
 	ply_put_element_setup( ply , "vertex" );
@@ -1167,9 +1208,48 @@ int PlyWriteTriangles( const char* fileName ,
 	
 	ply_element_count( ply , "face" , nr_faces );
 	ply_describe_property( ply , "face" , &face_props[0] );
+
+    // get all x,y,z coords:
+    double X[nr_vertices];
+    double Y[nr_vertices];
+    double Z[nr_vertices];
+	for( int i=0 ; i<nr_vertices ; i++ ) {
+        X[i] = vertices[i].point[0];
+        Y[i] = vertices[i].point[1];
+        Z[i] = vertices[i].point[2];
+    }
+    // calculate surface area
+    double sumSurface = 0.;
+	if( nr_faces ) {
+        int V1[nr_faces];
+        int V2[nr_faces];
+        int V3[nr_faces];
+        PlyFace ply_face;
+        ply_face.nr_vertices = 3;
+        ply_face.vertices = new int[3];
+
+        ply_put_element_setup( ply , "face" );
+        for (int i=0; i < nr_faces; i++)
+        {
+            V1[i] = triangles[i][0];
+            V2[i] = triangles[i][1];
+            V3[i] = triangles[i][2];
+        }
+
+        delete[] ply_face.vertices;
+
+        sumSurface = meshSurface(X,Y,Z, nr_faces, V1,V2,V3);
+        fprintf( stdout , "sumSurface %.10f\n" , sumSurface );
+    }
 	
 	// Write in the comments
 	if( comments && commentNum ) for( int i=0 ; i<commentNum ; i++ ) ply_put_comment( ply , comments[i] );
+	if( sumSurface ) {
+        char surfaceComment[64] = "sumSurface ";
+        const char * surfaceChars = std::to_string(sumSurface).c_str();
+        strcat (surfaceComment, surfaceChars );
+        ply_put_comment( ply , surfaceComment );
+    }
 
 	ply_header_complete(ply);
 	
